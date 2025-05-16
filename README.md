@@ -20,7 +20,7 @@
 
 ## Installation
 
-1. Install from the [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/YOUR_PLUGIN_ID_HERE) (Link will be updated once published)
+1. Install from the [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/27391-ziit) (Link will be updated once published)
 
 ## Setup
 
