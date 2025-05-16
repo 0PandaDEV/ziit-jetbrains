@@ -36,6 +36,11 @@
     <applicationService serviceImplementation="net.pandadev.ziitjetbrains.services.HeartbeatService"/>
     <applicationService serviceImplementation="net.pandadev.ziitjetbrains.ZiitApplicationService"/>
     
+    <applicationConfigurable parentId="tools"
+                             instance="net.pandadev.ziitjetbrains.config.ZiitSettingsConfigurable"
+                             id="net.pandadev.ziitjetbrains.config.ZiitSettingsConfigurable"
+                             displayName="Ziit Configuration"/>
+    
     <statusBarWidgetFactory id="ZiitStatusBarWidget" 
                            implementation="net.pandadev.ziitjetbrains.ui.ZiitStatusBarWidgetFactory"/>
     
