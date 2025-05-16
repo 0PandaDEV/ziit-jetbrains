@@ -53,5 +53,7 @@ tasks {
   }
   withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
     kotlinOptions.jvmTarget = "21"
+    kotlinOptions.apiVersion = "1.9"
+    kotlinOptions.languageVersion = "1.9"
   }
 }
