@@ -5,16 +5,23 @@
 
   <!-- Public plugin name should be written in Title Case.
        Guidelines: https://plugins.jetbrains.com/docs/marketplace/plugin-overview-page.html#plugin-name -->
-  <name>Ziit-jetbrains</name>
+  <name>Ziit</name>
 
   <!-- A displayed Vendor name or Organization ID displayed on the Plugins Page. -->
-  <vendor url="https://www.yourcompany.com">YourCompany</vendor>
+  <vendor email="contact@pandadev.net" url="https://pandadev.net">PandaDEV</vendor>
 
   <!-- Description of the plugin displayed on the Plugin Page and IDE Plugin Manager.
        Guidelines: https://plugins.jetbrains.com/docs/marketplace/plugin-overview-page.html#plugin-description -->
   <description><![CDATA[
-    Enter short description for your plugin here.<br>
-    <em>most HTML tags may be used</em>
+    <p>Ziit is the swiss army knife for coding time tracking.</p>
+    <p>This plugin integrates with the Ziit time tracking service to automatically track your coding activity and provide insights into your coding habits.</p>
+    <p>Features:</p>
+    <ul>
+      <li>Automatic time tracking while you code</li>
+      <li>Project, language, and file tracking</li>
+      <li>Offline support - continues tracking when not connected</li>
+      <li>Status bar integration showing your daily coding time</li>
+    </ul>
   ]]></description>
 
   <!-- Product and plugin compatibility requirements.
@@ -24,6 +31,35 @@
   <!-- Extension points defined by the plugin.
        Read more: https://plugins.jetbrains.com/docs/intellij/plugin-extension-points.html -->
   <extensions defaultExtensionNs="com.intellij">
-
+    <applicationService serviceImplementation="net.pandadev.ziitjetbrains.config.ZiitConfig"/>
+    <applicationService serviceImplementation="net.pandadev.ziitjetbrains.util.LogService"/>
+    <applicationService serviceImplementation="net.pandadev.ziitjetbrains.services.HeartbeatService"/>
+    <applicationService serviceImplementation="net.pandadev.ziitjetbrains.ZiitApplicationService"/>
+    
+    <statusBarWidgetFactory id="ZiitStatusBarWidget" 
+                           implementation="net.pandadev.ziitjetbrains.ui.ZiitStatusBarWidgetFactory"/>
+    
+    <notificationGroup id="Ziit Notifications" displayType="BALLOON"/>
   </extensions>
+  
+  <actions>
+    <group id="Ziit.Menu" text="Ziit" description="Ziit time tracking actions">
+      <add-to-group group-id="ToolsMenu" anchor="last"/>
+      
+      <action id="Ziit.SetApiKey" 
+              class="net.pandadev.ziitjetbrains.actions.SetApiKeyAction" 
+              text="Set API Key" 
+              description="Set your Ziit API key"/>
+              
+      <action id="Ziit.SetBaseUrl" 
+              class="net.pandadev.ziitjetbrains.actions.SetBaseUrlAction" 
+              text="Set Instance URL" 
+              description="Set your Ziit instance URL"/>
+              
+      <action id="Ziit.OpenDashboard" 
+              class="net.pandadev.ziitjetbrains.actions.OpenDashboardAction" 
+              text="Open Dashboard" 
+              description="Open the Ziit dashboard in your browser"/>
+    </group>
+  </actions>
 </idea-plugin>

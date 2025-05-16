@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "net.pandadev"
-version = "1.0-SNAPSHOT"
+version = "1.0.0"
 
 repositories {
   mavenCentral()
@@ -24,6 +24,9 @@ dependencies {
     // Add necessary plugin dependencies for compilation here, example:
     // bundledPlugin("com.intellij.java")
   }
+  
+  // JSON library
+  implementation("org.json:json:20240303")
 }
 
 intellijPlatform {
@@ -33,7 +36,11 @@ intellijPlatform {
     }
 
     changeNotes = """
-      Initial version
+      Initial version with time tracking functionality:
+      - Automatic time tracking while you code
+      - Status bar integration showing daily coding time
+      - Offline support for continued tracking when not connected
+      - Integration with Ziit dashboard
     """.trimIndent()
   }
 }
