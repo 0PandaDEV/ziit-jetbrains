@@ -41,4 +41,4 @@ The plugin provides the following actions, which can be accessed via `Help` > `F
 - `Ziit: Set Instance URL`: Allows you to set or update your Ziit instance URL.
 - `Ziit: Open Dashboard`: Opens your Ziit dashboard in your default web browser.
 
-You can also configure the API Key and Instance URL directly in the settings/preferences as described in the Setup section. 
+You can also configure the API Key and Instance URL directly in the settings/preferences as described in the Setup section.
