@@ -1,5 +1,6 @@
 package net.pandadev.ziitjetbrains.services
 
+import com.intellij.openapi.application.ApplicationActivationListener
 import com.intellij.openapi.application.ApplicationInfo
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
@@ -16,12 +17,8 @@ import com.intellij.openapi.fileEditor.FileEditorManagerEvent
 import com.intellij.openapi.fileEditor.FileEditorManagerListener
 import com.intellij.openapi.project.ProjectManager
 import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.openapi.wm.IdeFrame
 import com.intellij.util.io.HttpRequests
-import net.pandadev.ziitjetbrains.config.ZiitConfig
-import net.pandadev.ziitjetbrains.model.Heartbeat
-import net.pandadev.ziitjetbrains.ui.StatusBarWidget
-import net.pandadev.ziitjetbrains.util.LogService
-import org.json.JSONObject
 import java.io.File
 import java.net.URI
 import java.nio.charset.StandardCharsets
@@ -32,13 +29,19 @@ import java.util.*
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
+import net.pandadev.ziitjetbrains.config.ZiitConfig
+import net.pandadev.ziitjetbrains.model.Heartbeat
+import net.pandadev.ziitjetbrains.ui.StatusBarWidget
+import net.pandadev.ziitjetbrains.util.LogService
+import org.json.JSONObject
 
 @Service
-class HeartbeatService {
+class HeartbeatService : ApplicationActivationListener {
     companion object {
         private const val HEARTBEAT_INTERVAL_MS = 120000L
         private const val OFFLINE_FILE_NAME = "offline_heartbeats.json"
-        private val OFFLINE_FILE_PATH = Paths.get(System.getProperty("user.home"), ".ziit", OFFLINE_FILE_NAME)
+        private val OFFLINE_FILE_PATH =
+                Paths.get(System.getProperty("user.home"), ".ziit", OFFLINE_FILE_NAME)
 
         fun getInstance(): HeartbeatService = service()
     }
@@ -63,35 +66,39 @@ class HeartbeatService {
     private var statusBarWidget: StatusBarWidget? = null
 
     init {
-
         val ziitDir = File(System.getProperty("user.home"), ".ziit")
         if (!ziitDir.exists()) {
             ziitDir.mkdirs()
         }
 
+        ApplicationManager.getApplication()
+                .messageBus
+                .connect()
+                .subscribe(ApplicationActivationListener.TOPIC, this)
 
         loadOfflineHeartbeats()
-
-
         registerEventListeners()
-
-
         scheduleHeartbeat()
 
+        scheduler.scheduleAtFixedRate({ syncOfflineHeartbeats() }, 30, 30, TimeUnit.SECONDS)
 
-        scheduler.scheduleAtFixedRate(
-            { syncOfflineHeartbeats() }, 30, 30, TimeUnit.SECONDS
-        )
+        scheduler.scheduleAtFixedRate({ fetchDailySummary() }, 0, 15, TimeUnit.MINUTES)
 
+        scheduler.scheduleAtFixedRate({ fetchUserSettings() }, 0, 30, TimeUnit.MINUTES)
+    }
 
-        scheduler.scheduleAtFixedRate(
-            { fetchDailySummary() }, 0, 15, TimeUnit.MINUTES
-        )
+    override fun applicationActivated(ideFrame: IdeFrame) {
+        logger.log("Application activated (window focused)")
+        isWindowFocused = true
+        lastActivity = System.currentTimeMillis()
+        statusBarWidget?.startTracking()
+        fetchDailySummary()
+    }
 
-
-        scheduler.scheduleAtFixedRate(
-            { fetchUserSettings() }, 0, 30, TimeUnit.MINUTES
-        )
+    override fun applicationDeactivated(ideFrame: IdeFrame) {
+        logger.log("Application deactivated (window lost focus)")
+        isWindowFocused = false
+        statusBarWidget?.stopTracking()
     }
 
     fun setStatusBarWidget(widget: StatusBarWidget) {
@@ -103,34 +110,39 @@ class HeartbeatService {
     private fun registerEventListeners() {
         logger.log("Registering event listeners for editor changes")
 
+        EditorFactory.getInstance()
+                .addEditorFactoryListener(
+                        object : EditorFactoryListener {
+                            override fun editorCreated(event: EditorFactoryEvent) {
+                                val editor = event.editor
+                                val document = editor.document
 
-        EditorFactory.getInstance().addEditorFactoryListener(object : EditorFactoryListener {
-            override fun editorCreated(event: EditorFactoryEvent) {
-                val editor = event.editor
-                val document = editor.document
+                                document.addDocumentListener(
+                                        object : DocumentListener {
+                                            override fun documentChanged(event: DocumentEvent) {
+                                                handleDocumentChange(event.document)
+                                            }
+                                        }
+                                )
 
-
-                document.addDocumentListener(object : DocumentListener {
-                    override fun documentChanged(event: DocumentEvent) {
-                        handleDocumentChange(event.document)
-                    }
-                })
-
-
-                handleActiveEditorChange(editor)
-            }
-        }, ApplicationManager.getApplication())
-
+                                handleActiveEditorChange(editor)
+                            }
+                        },
+                        ApplicationManager.getApplication()
+                )
 
         val connection = ProjectManager.getInstance().defaultProject.messageBus.connect()
-        connection.subscribe(FileEditorManagerListener.FILE_EDITOR_MANAGER, object : FileEditorManagerListener {
-            override fun selectionChanged(event: FileEditorManagerEvent) {
-                val file = event.newFile
-                if (file != null) {
-                    handleFileChange(file)
+        connection.subscribe(
+                FileEditorManagerListener.FILE_EDITOR_MANAGER,
+                object : FileEditorManagerListener {
+                    override fun selectionChanged(event: FileEditorManagerEvent) {
+                        val file = event.newFile
+                        if (file != null) {
+                            handleFileChange(file)
+                        }
+                    }
                 }
-            }
-        })
+        )
     }
 
     private fun handleActiveEditorChange(editor: Editor) {
@@ -170,13 +182,14 @@ class HeartbeatService {
     private fun handleFileChange(file: VirtualFile) {
         val fileName = file.name
 
-
-        val fileType = com.intellij.openapi.fileTypes.FileTypeManager.getInstance().getFileTypeByFile(file)
-        val language = when {
-            fileType.name != "UNKNOWN" -> fileType.name.lowercase()
-            file.extension != null -> file.extension?.lowercase() ?: "unknown"
-            else -> "unknown"
-        }
+        val fileType =
+                com.intellij.openapi.fileTypes.FileTypeManager.getInstance().getFileTypeByFile(file)
+        val language =
+                when {
+                    fileType.name != "UNKNOWN" -> fileType.name.lowercase()
+                    file.extension != null -> file.extension?.lowercase() ?: "unknown"
+                    else -> "unknown"
+                }
 
         logger.log("File changed: $fileName ($language)")
         activeDocumentInfo = Pair(fileName, language)
@@ -197,8 +210,13 @@ class HeartbeatService {
         val file = fileDocManager.getFile(document)
 
         if (file != null) {
-
-            val fileType = com.intellij.openapi.fileTypes.FileTypeManager.getInstance().getFileTypeByFile(file)
+            val fileType =
+                    com.intellij
+                            .openapi
+                            .fileTypes
+                            .FileTypeManager
+                            .getInstance()
+                            .getFileTypeByFile(file)
             return when {
                 fileType.name != "UNKNOWN" -> fileType.name.lowercase()
                 file.extension != null -> file.extension?.lowercase() ?: "unknown"
@@ -213,7 +231,6 @@ class HeartbeatService {
         if (file == null) return null
 
         try {
-
             val projectManager = ProjectManager.getInstance()
             for (project in projectManager.openProjects) {
                 val projectBasePath = project.basePath
@@ -221,7 +238,6 @@ class HeartbeatService {
                     return project.name
                 }
             }
-
 
             val projectDir = file.parent
             if (projectDir != null) {
@@ -240,16 +256,27 @@ class HeartbeatService {
         try {
             val projectManager = ProjectManager.getInstance()
             for (project in projectManager.openProjects) {
-                val vcsManager = com.intellij.openapi.vcs.ProjectLevelVcsManager.getInstance(project)
-                val gitVcs = vcsManager.allActiveVcss.find { it.name.equals("Git", ignoreCase = true) }
+                val vcsManager =
+                        com.intellij.openapi.vcs.ProjectLevelVcsManager.getInstance(project)
+                val gitVcs =
+                        vcsManager.allActiveVcss.find { it.name.equals("Git", ignoreCase = true) }
 
                 if (gitVcs != null) {
                     val gitPath = file.path
                     for (root in vcsManager.allVersionedRoots) {
                         if (gitPath.startsWith(root.path)) {
-
-                            val process = Runtime.getRuntime()
-                                .exec(arrayOf("git", "rev-parse", "--abbrev-ref", "HEAD"), null, File(root.path))
+                            val process =
+                                    Runtime.getRuntime()
+                                            .exec(
+                                                    arrayOf(
+                                                            "git",
+                                                            "rev-parse",
+                                                            "--abbrev-ref",
+                                                            "HEAD"
+                                                    ),
+                                                    null,
+                                                    File(root.path)
+                                            )
                             val reader = process.inputStream.bufferedReader()
                             val branch = reader.readLine()
                             reader.close()
@@ -278,16 +305,19 @@ class HeartbeatService {
         logger.log("Setting up heartbeat schedule with interval: $HEARTBEAT_INTERVAL_MS ms")
 
         scheduler.scheduleAtFixedRate(
-            {
-                if (activeDocumentInfo != null && isUserActive()) {
-                    sendHeartbeat()
-                } else {
-                    logger.log("User inactive or no active document, skipping heartbeat")
-                    if (!isUserActive()) {
-                        statusBarWidget?.stopTracking()
+                {
+                    if (activeDocumentInfo != null && isUserActive()) {
+                        sendHeartbeat()
+                    } else {
+                        logger.log("User inactive or no active document, skipping heartbeat")
+                        if (!isUserActive()) {
+                            statusBarWidget?.stopTracking()
+                        }
                     }
-                }
-            }, HEARTBEAT_INTERVAL_MS, HEARTBEAT_INTERVAL_MS, TimeUnit.MILLISECONDS
+                },
+                HEARTBEAT_INTERVAL_MS,
+                HEARTBEAT_INTERVAL_MS,
+                TimeUnit.MILLISECONDS
         )
     }
 
@@ -310,26 +340,31 @@ class HeartbeatService {
     private fun fetchDailySummary() {
         val apiKey = config.getApiKey()
         val baseUrl = config.getBaseUrl()
-        val enabled = config.isEnabled()
 
-        if (!enabled || apiKey.isNullOrEmpty() || baseUrl.isEmpty()) {
+        if (apiKey.isNullOrEmpty() || baseUrl.isEmpty()) {
             return
         }
 
-
         ApplicationManager.getApplication().executeOnPooledThread {
             try {
-                val now = Calendar.getInstance()
-                val timezoneOffsetMinutes = now.timeZone.rawOffset / (60 * 1000)
-                val timezoneOffsetSeconds = timezoneOffsetMinutes * 60
+                val cal = Calendar.getInstance()
+                val currentOffsetMs = cal.timeZone.getOffset(System.currentTimeMillis())
+                val timezoneOffsetSeconds = -(currentOffsetMs / 1000)
 
-                val url = URI(
-                    "$baseUrl/api/external/stats" + "?timeRange=today" + "&midnightOffsetSeconds=$timezoneOffsetSeconds" + "&t=${System.currentTimeMillis()}"
-                )
+                val url =
+                        URI(
+                                "$baseUrl/api/external/stats" +
+                                        "?timeRange=today" +
+                                        "&midnightOffsetSeconds=$timezoneOffsetSeconds" +
+                                        "&t=${System.currentTimeMillis()}"
+                        )
 
-                val response = HttpRequests.request(url.toString()).tuner { connection ->
-                    connection.setRequestProperty("Authorization", "Bearer $apiKey")
-                }.readString()
+                val response =
+                        HttpRequests.request(url.toString())
+                                .tuner { connection ->
+                                    connection.setRequestProperty("Authorization", "Bearer $apiKey")
+                                }
+                                .readString()
 
                 setOnlineStatus(true)
                 setApiKeyStatus(true)
@@ -348,7 +383,6 @@ class HeartbeatService {
                     todayTotalSeconds = 0
                     statusBarWidget?.updateTime(0, 0)
                 }
-
             } catch (e: Exception) {
                 if (e.message?.contains("401") == true) {
                     setApiKeyStatus(false)
@@ -370,25 +404,17 @@ class HeartbeatService {
             return
         }
 
-
         ApplicationManager.getApplication().executeOnPooledThread {
             try {
                 val url = URI("$baseUrl/api/external/user")
 
-                val response = HttpRequests.request(url.toString()).tuner { connection ->
-                    connection.setRequestProperty("Authorization", "Bearer $apiKey")
-                }.readString()
+                HttpRequests.request(url.toString())
+                        .tuner { connection ->
+                            connection.setRequestProperty("Authorization", "Bearer $apiKey")
+                        }
+                        .readString()
 
                 setApiKeyStatus(true)
-
-                val jsonResponse = JSONObject(response)
-                if (jsonResponse.has("keystrokeTimeout")) {
-                    val timeout = jsonResponse.getInt("keystrokeTimeout")
-                    updateKeystrokeTimeout(timeout)
-                    config.setKeystrokeTimeout(timeout)
-                    logger.log("Keystroke timeout fetched from API: $timeout minutes")
-                }
-
             } catch (e: Exception) {
                 if (e.message?.contains("401") == true) {
                     setApiKeyStatus(false)
@@ -414,40 +440,41 @@ class HeartbeatService {
         val batch = ArrayList(offlineHeartbeats)
         offlineHeartbeats.clear()
 
-
         ApplicationManager.getApplication().executeOnPooledThread {
             try {
                 val url = URI("$baseUrl/api/external/batch")
                 val jsonArray = org.json.JSONArray()
                 batch.forEach { heartbeat ->
-                    val heartbeatObject = JSONObject().apply {
-                        put("timestamp", heartbeat.timestamp)
-                        heartbeat.project?.let { put("project", it) }
-                        heartbeat.language?.let { put("language", it) }
-                        heartbeat.file?.let { put("file", it) }
-                        heartbeat.branch?.let { put("branch", it) }
-                        put("editor", heartbeat.editor)
-                        put("os", heartbeat.os)
-                    }
+                    val heartbeatObject =
+                            JSONObject().apply {
+                                put("timestamp", heartbeat.timestamp)
+                                heartbeat.project?.let { put("project", it) }
+                                heartbeat.language?.let { put("language", it) }
+                                heartbeat.file?.let { put("file", it) }
+                                heartbeat.branch?.let { put("branch", it) }
+                                put("editor", heartbeat.editor)
+                                put("os", heartbeat.os)
+                            }
                     jsonArray.put(heartbeatObject)
                 }
 
-                HttpRequests.post(url.toString(), "application/json").tuner { connection ->
-                    connection.setRequestProperty("Authorization", "Bearer $apiKey")
-                    connection.setRequestProperty("Content-Type", "application/json")
-                }.productNameAsUserAgent().gzip(true).connect { request ->
-                    request.write(jsonArray.toString())
-                    request.readString()
-                }
-
-
+                HttpRequests.post(url.toString(), "application/json")
+                        .tuner { connection ->
+                            connection.setRequestProperty("Authorization", "Bearer $apiKey")
+                            connection.setRequestProperty("Content-Type", "application/json")
+                        }
+                        .productNameAsUserAgent()
+                        .gzip(true)
+                        .connect { request ->
+                            request.write(jsonArray.toString())
+                            request.readString()
+                        }
 
                 this.setOnlineStatus(true)
                 this.setApiKeyStatus(true)
                 this.saveOfflineHeartbeats()
                 this.fetchDailySummary()
                 logger.log("Successfully synced ${batch.size} offline heartbeats")
-
             } catch (e: Exception) {
                 if (e.message?.contains("401") == true) {
                     this.setApiKeyStatus(false)
@@ -483,36 +510,50 @@ class HeartbeatService {
         val (fileName, language) = activeDocumentInfo!!
 
         val fileDocManager = FileDocumentManager.getInstance()
-        val docFile = EditorFactory.getInstance().allEditors.firstOrNull { editor ->
-            fileDocManager.getFile(editor.document)?.name == fileName
-        }?.let { editor ->
-            fileDocManager.getFile(editor.document)
-        }
+        val docFile =
+                EditorFactory.getInstance()
+                        .allEditors
+                        .firstOrNull { editor ->
+                            fileDocManager.getFile(editor.document)?.name == fileName
+                        }
+                        ?.let { editor -> fileDocManager.getFile(editor.document) }
 
         val project = getProjectName(docFile) ?: "Unknown"
         val apiKey = config.getApiKey()
         val baseUrl = config.getBaseUrl()
-        val enabled = config.isEnabled()
 
-        if (!enabled || apiKey.isNullOrEmpty() || baseUrl.isEmpty()) {
+        if (apiKey.isNullOrEmpty() || baseUrl.isEmpty()) {
             return
         }
 
         val branch = getGitBranch(docFile)
-        val heartbeat = Heartbeat(
-            timestamp = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).format(Date()),
-            project = project,
-            language = language,
-            file = fileName,
-            branch = branch,
-            editor = if (ApplicationInfo.getInstance().fullApplicationName.contains("Ultimate")) "IntelliJ Ultimate" else "IntelliJ Community Edition",
-            os = System.getProperty("os.name").let {
-                when {
-                    it.lowercase().contains("windows") -> "Windows"
-                    it.lowercase().contains("mac") -> "macOS"
-                    else -> "Linux"
-                }
-            })
+        val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
+        sdf.timeZone = TimeZone.getTimeZone("UTC")
+        val utcTimestamp = sdf.format(Date())
+
+        val heartbeat =
+                Heartbeat(
+                        timestamp = utcTimestamp,
+                        project = project,
+                        language = language,
+                        file = fileName,
+                        branch = branch,
+                        editor =
+                                if (ApplicationInfo.getInstance()
+                                                .fullApplicationName
+                                                .contains("Ultimate")
+                                )
+                                        "IntelliJ Ultimate"
+                                else "IntelliJ Community Edition",
+                        os =
+                                System.getProperty("os.name").let {
+                                    when {
+                                        it.lowercase().contains("windows") -> "Windows"
+                                        it.lowercase().contains("mac") -> "macOS"
+                                        else -> "Linux"
+                                    }
+                                }
+                )
 
         if (!isOnline) {
             synchronized(offlineHeartbeats) {
@@ -525,29 +566,33 @@ class HeartbeatService {
         ApplicationManager.getApplication().executeOnPooledThread {
             try {
                 val url = URI("$baseUrl/api/external/heartbeats")
-                val jsonData = JSONObject().apply {
-                    put("timestamp", heartbeat.timestamp)
-                    heartbeat.project?.let { put("project", it) }
-                    heartbeat.language?.let { put("language", it) }
-                    heartbeat.file?.let { put("file", it) }
-                    heartbeat.branch?.let { put("branch", it) }
-                    put("editor", heartbeat.editor)
-                    put("os", heartbeat.os)
-                }
+                val jsonData =
+                        JSONObject().apply {
+                            put("timestamp", heartbeat.timestamp)
+                            heartbeat.project?.let { put("project", it) }
+                            heartbeat.language?.let { put("language", it) }
+                            heartbeat.file?.let { put("file", it) }
+                            heartbeat.branch?.let { put("branch", it) }
+                            put("editor", heartbeat.editor)
+                            put("os", heartbeat.os)
+                        }
 
-                HttpRequests.post(url.toString(), "application/json").tuner { connection ->
-                    connection.setRequestProperty("Authorization", "Bearer $apiKey")
-                    connection.setRequestProperty("Content-Type", "application/json")
-                }.productNameAsUserAgent().gzip(true).connect { request ->
-                    request.write(jsonData.toString())
+                HttpRequests.post(url.toString(), "application/json")
+                        .tuner { connection ->
+                            connection.setRequestProperty("Authorization", "Bearer $apiKey")
+                            connection.setRequestProperty("Content-Type", "application/json")
+                        }
+                        .productNameAsUserAgent()
+                        .gzip(true)
+                        .connect { request ->
+                            request.write(jsonData.toString())
 
-                    request.readString()
-                }
+                            request.readString()
+                        }
 
                 successCount++
                 this.setOnlineStatus(true)
                 this.setApiKeyStatus(true)
-
             } catch (e: Exception) {
                 failureCount++
                 if (e.message?.contains("401") == true) {
@@ -576,15 +621,22 @@ class HeartbeatService {
                     offlineHeartbeats.clear()
                     for (i in 0 until jsonArray.length()) {
                         val obj = jsonArray.getJSONObject(i)
-                        val heartbeat = Heartbeat(
-                            timestamp = obj.getString("timestamp"),
-                            project = if (obj.has("project")) obj.getString("project") else null,
-                            language = if (obj.has("language")) obj.getString("language") else null,
-                            file = if (obj.has("file")) obj.getString("file") else null,
-                            branch = if (obj.has("branch")) obj.getString("branch") else null,
-                            editor = obj.getString("editor"),
-                            os = obj.getString("os")
-                        )
+                        val heartbeat =
+                                Heartbeat(
+                                        timestamp = obj.getString("timestamp"),
+                                        project =
+                                                if (obj.has("project")) obj.getString("project")
+                                                else null,
+                                        language =
+                                                if (obj.has("language")) obj.getString("language")
+                                                else null,
+                                        file = if (obj.has("file")) obj.getString("file") else null,
+                                        branch =
+                                                if (obj.has("branch")) obj.getString("branch")
+                                                else null,
+                                        editor = obj.getString("editor"),
+                                        os = obj.getString("os")
+                                )
                         offlineHeartbeats.add(heartbeat)
                     }
                 }
@@ -592,19 +644,14 @@ class HeartbeatService {
             }
         } catch (e: Exception) {
             logger.error("Error loading offline heartbeats: ${e.message}")
-            synchronized(offlineHeartbeats) {
-                offlineHeartbeats.clear()
-            }
+            synchronized(offlineHeartbeats) { offlineHeartbeats.clear() }
         }
     }
 
     private fun saveOfflineHeartbeats() {
         try {
             val snapshot: List<Heartbeat>
-            synchronized(offlineHeartbeats) {
-
-                snapshot = ArrayList(offlineHeartbeats)
-            }
+            synchronized(offlineHeartbeats) { snapshot = ArrayList(offlineHeartbeats) }
 
             val jsonArray = org.json.JSONArray()
             for (heartbeat in snapshot) {
@@ -619,17 +666,13 @@ class HeartbeatService {
                 jsonArray.put(obj)
             }
 
-            Files.write(
-                OFFLINE_FILE_PATH, jsonArray.toString().toByteArray(StandardCharsets.UTF_8)
-            )
+            Files.write(OFFLINE_FILE_PATH, jsonArray.toString().toByteArray(StandardCharsets.UTF_8))
         } catch (e: Exception) {
             logger.error("Error saving offline heartbeats: ${e.message}")
         }
     }
 
     private fun setOnlineStatus(isOnline: Boolean) {
-
-
         if (this.isOnline != isOnline) {
             this.isOnline = isOnline
             ApplicationManager.getApplication().invokeLater {
@@ -640,7 +683,6 @@ class HeartbeatService {
     }
 
     private fun setApiKeyStatus(isValid: Boolean) {
-
         if (this.hasValidApiKey != isValid) {
             this.hasValidApiKey = isValid
             ApplicationManager.getApplication().invokeLater {
