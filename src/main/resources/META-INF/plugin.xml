@@ -13,15 +13,27 @@
   <!-- Description of the plugin displayed on the Plugin Page and IDE Plugin Manager.
        Guidelines: https://plugins.jetbrains.com/docs/marketplace/plugin-overview-page.html#plugin-description -->
   <description><![CDATA[
-    <p>Ziit is the swiss army knife for coding time tracking.</p>
-    <p>This plugin integrates with the Ziit time tracking service to automatically track your coding activity and provide insights into your coding habits.</p>
-    <p>Features:</p>
+    <p>
+      The <a href="https://docs.ziit.app/extensions/jetbrains">Ziit JetBrains Plugin</a> integrates <a href="https://ziit.app">Ziit</a>, the swiss army knife for coding time tracking, directly into your JetBrains IDE.
+      The main Ziit project can be found on <a href="https://github.com/0pandadev/ziit">GitHub</a>.
+    </p>
+    <p>
+      This plugin automatically tracks your coding activity, helping you gain insights into your work patterns and improve productivity.
+      It seamlessly sends data to your configured Ziit instance.
+    </p>
+    <p>Key Features:</p>
     <ul>
-      <li>Automatic time tracking while you code</li>
-      <li>Project, language, and file tracking</li>
-      <li>Offline support - continues tracking when not connected</li>
-      <li>Status bar integration showing your daily coding time</li>
+      <li><b>Automatic Time Tracking:</b> Monitors your coding activity without manual intervention.</li>
+      <li><b>Detailed Analytics:</b> Tracks time spent on projects, languages, and files.</li>
+      <li><b>Offline Support:</b> Continues to track your activity even when disconnected from the internet and syncs when you're back online.</li>
+      <li><b>Status Bar Integration:</b> Displays your current coding time directly in the IDE's status bar.</li>
+      <li><b>Easy Configuration:</b> Set your Ziit instance URL and API Key via IDE settings (<code>File &gt; Settings &gt; Tools &gt; Ziit Configuration</code>).</li>
+      <li><b>Dashboard Access:</b> Quickly open your Ziit dashboard using the "Ziit: Open Dashboard" action.</li>
     </ul>
+    <p>
+      For support, feature requests, or to report issues with this plugin, please visit our <a href="https://github.com/0pandadev/ziit-jetbrains/issues">GitHub Issues page</a>.
+      Join our community on <a href="https://discord.gg/Y7SbYphVw9">Discord</a>.
+    </p>
   ]]></description>
 
   <!-- Product and plugin compatibility requirements.
@@ -45,6 +57,8 @@
                            implementation="net.pandadev.ziitjetbrains.ui.ZiitStatusBarWidgetFactory"/>
     
     <notificationGroup id="Ziit Notifications" displayType="BALLOON"/>
+
+    <registryKey key="kotlin.mpp.tests.force.gradle" defaultValue="false" description="Force Gradle for MPP tests" overrides="true"/>
   </extensions>
   
   <actions>
