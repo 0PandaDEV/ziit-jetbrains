@@ -6,7 +6,6 @@ import com.intellij.notification.Notifications
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.Logger
-import net.pandadev.ziitjetbrains.config.ZiitConfig
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -19,7 +18,6 @@ class LogService {
         fun getInstance(): LogService = service()
     }
 
-    private val config = ZiitConfig.getInstance()
     private val dateFormatter = SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
 
     fun log(message: String) {
@@ -28,12 +26,6 @@ class LogService {
 
 
         LOG.info(logMessage)
-
-
-        if (config.isDebugEnabled()) {
-
-
-        }
     }
 
     fun error(message: String) {
@@ -42,12 +34,6 @@ class LogService {
 
 
         LOG.error(logMessage)
-
-
-        if (config.isDebugEnabled()) {
-
-
-        }
     }
 
     fun notifyInfo(title: String, message: String) {
@@ -60,13 +46,6 @@ class LogService {
     fun notifyError(title: String, message: String) {
         val notification = Notification(
             NOTIFICATION_GROUP_ID, title, message, NotificationType.ERROR
-        )
-        Notifications.Bus.notify(notification)
-    }
-
-    fun notifyWarning(title: String, message: String) {
-        val notification = Notification(
-            NOTIFICATION_GROUP_ID, title, message, NotificationType.WARNING
         )
         Notifications.Bus.notify(notification)
     }

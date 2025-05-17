@@ -31,5 +31,5 @@ class ZiitStatusBarWidgetFactory : StatusBarWidgetFactory {
 
     override fun canBeEnabledOn(statusBar: StatusBar): Boolean = true
 
-    override fun isEnabledByDefault(): Boolean = ZiitConfig.getInstance().isStatusBarEnabled()
+    override fun isEnabledByDefault(): Boolean = true
 } 

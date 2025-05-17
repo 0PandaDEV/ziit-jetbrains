@@ -6,9 +6,9 @@ import com.intellij.openapi.wm.StatusBar
 import com.intellij.openapi.wm.StatusBarWidget
 import com.intellij.openapi.wm.WindowManager
 import com.intellij.util.Consumer
+import java.awt.event.MouseEvent
 import net.pandadev.ziitjetbrains.config.ZiitConfig
 import net.pandadev.ziitjetbrains.util.LogService
-import java.awt.event.MouseEvent
 
 class StatusBarWidget(private val project: Project) : StatusBarWidget {
     companion object {
@@ -45,10 +45,6 @@ class StatusBarWidget(private val project: Project) : StatusBarWidget {
     }
 
     fun install() {
-        if (!config.isStatusBarEnabled()) {
-            return
-        }
-
         val statusBar = WindowManager.getInstance().getStatusBar(project) ?: return
         this.statusBar = statusBar
 
