@@ -1,16 +1,16 @@
-package net.pandadev.ziitjetbrains.config
+package net.pandadev.ziitjetbrains
 
 import com.intellij.ide.util.PropertiesComponent
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.ui.Messages
+import org.json.JSONObject
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Paths
-import org.json.JSONObject
 
 @Service
-class ZiitConfig {
+class Config {
     companion object {
         private const val CONFIG_FILE_NAME = ".ziit.json"
         private const val OLD_CONFIG_FILE_NAME = ".ziit.cfg"
@@ -18,7 +18,7 @@ class ZiitConfig {
         private val OLD_CONFIG_FILE_PATH = Paths.get(System.getProperty("user.home"), OLD_CONFIG_FILE_NAME)
         private const val API_KEY = "ziit.apiKey"
         private const val BASE_URL = "ziit.baseUrl"
-        fun getInstance(): ZiitConfig = service()
+        fun getInstance(): Config = service()
     }
 
     private val properties = PropertiesComponent.getInstance()
@@ -70,19 +70,10 @@ class ZiitConfig {
     private fun initializeAndSyncConfig() {
         val configFile = File(CONFIG_FILE_PATH.toString())
         if (!configFile.exists()) {
-            createConfigFile()
+            updateConfigFile()
         } else {
             syncFromConfigFile()
         }
-    }
-
-    private fun createConfigFile() {
-        try {
-            val json = JSONObject()
-            getApiKey()?.let { json.put("apiKey", it) }
-            json.put("baseUrl", getBaseUrl())
-            Files.write(CONFIG_FILE_PATH, json.toString(2).toByteArray())
-        } catch (_: Exception) {}
     }
 
     private fun syncFromConfigFile() {
@@ -91,7 +82,8 @@ class ZiitConfig {
             val json = JSONObject(content)
             if (json.has("apiKey")) properties.setValue(API_KEY, json.getString("apiKey"))
             if (json.has("baseUrl")) properties.setValue(BASE_URL, json.getString("baseUrl"))
-        } catch (_: Exception) {}
+        } catch (_: Exception) {
+        }
     }
 
     private fun updateConfigFile() {
@@ -100,14 +92,13 @@ class ZiitConfig {
             getApiKey()?.let { json.put("apiKey", it) }
             json.put("baseUrl", getBaseUrl())
             Files.write(CONFIG_FILE_PATH, json.toString(2).toByteArray())
-        } catch (_: Exception) {}
+        } catch (_: Exception) {
+        }
     }
 
     fun promptForApiKey(): String? {
         val apiKey = Messages.showInputDialog(
-            "Enter your Ziit API key",
-            "Ziit API Key",
-            null
+            "Enter your Ziit API key", "Ziit API Key", null
         )
         if (apiKey != null && apiKey.isNotEmpty()) {
             setApiKey(apiKey)
@@ -117,11 +108,7 @@ class ZiitConfig {
 
     fun promptForBaseUrl(): String? {
         val baseUrl = Messages.showInputDialog(
-            "Enter your Ziit instance URL",
-            "Ziit Instance URL",
-            null,
-            getBaseUrl(),
-            null
+            "Enter your Ziit instance URL", "Ziit Instance URL", null, getBaseUrl(), null
         )
         if (baseUrl != null && baseUrl.isNotEmpty()) {
             setBaseUrl(baseUrl)

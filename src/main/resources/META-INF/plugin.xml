@@ -1,18 +1,18 @@
 <!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
 <idea-plugin>
-  <!-- Unique identifier of the plugin. It should be FQN. It cannot be changed between the plugin versions. -->
-  <id>net.pandadev.ziit-jetbrains</id>
+    <!-- Unique identifier of the plugin. It should be FQN. It cannot be changed between the plugin versions. -->
+    <id>net.pandadev.ziit-jetbrains</id>
 
-  <!-- Public plugin name should be written in Title Case.
-       Guidelines: https://plugins.jetbrains.com/docs/marketplace/plugin-overview-page.html#plugin-name -->
-  <name>Ziit</name>
+    <!-- Public plugin name should be written in Title Case.
+         Guidelines: https://plugins.jetbrains.com/docs/marketplace/plugin-overview-page.html#plugin-name -->
+    <name>Ziit</name>
 
-  <!-- A displayed Vendor name or Organization ID displayed on the Plugins Page. -->
-  <vendor email="contact@pandadev.net" url="https://pandadev.net">PandaDEV</vendor>
+    <!-- A displayed Vendor name or Organization ID displayed on the Plugins Page. -->
+    <vendor email="contact@pandadev.net" url="https://pandadev.net">PandaDEV</vendor>
 
-  <!-- Description of the plugin displayed on the Plugin Page and IDE Plugin Manager.
-       Guidelines: https://plugins.jetbrains.com/docs/marketplace/plugin-overview-page.html#plugin-description -->
-  <description><![CDATA[
+    <!-- Description of the plugin displayed on the Plugin Page and IDE Plugin Manager.
+         Guidelines: https://plugins.jetbrains.com/docs/marketplace/plugin-overview-page.html#plugin-description -->
+    <description><![CDATA[
     <p>
       The <a href="https://docs.ziit.app/extensions/jetbrains">Ziit JetBrains Plugin</a> integrates <a href="https://ziit.app">Ziit</a>, the swiss army knife for coding time tracking, directly into your JetBrains IDE.
       The main Ziit project can be found on <a href="https://github.com/0pandadev/ziit">GitHub</a>.
@@ -36,49 +36,39 @@
     </p>
   ]]></description>
 
-  <!-- Product and plugin compatibility requirements.
-       Read more: https://plugins.jetbrains.com/docs/intellij/plugin-compatibility.html -->
-  <depends>com.intellij.modules.platform</depends>
+    <!-- Product and plugin compatibility requirements.
+         Read more: https://plugins.jetbrains.com/docs/intellij/plugin-compatibility.html -->
+    <depends>com.intellij.modules.platform</depends>
 
-  <!-- Extension points defined by the plugin.
-       Read more: https://plugins.jetbrains.com/docs/intellij/plugin-extension-points.html -->
-  <extensions defaultExtensionNs="com.intellij">
-    <applicationService serviceImplementation="net.pandadev.ziitjetbrains.config.ZiitConfig"/>
-    <applicationService serviceImplementation="net.pandadev.ziitjetbrains.util.LogService"/>
-    <applicationService serviceImplementation="net.pandadev.ziitjetbrains.services.HeartbeatService"/>
-    <applicationService serviceImplementation="net.pandadev.ziitjetbrains.ZiitApplicationService"/>
-    
-    <applicationConfigurable parentId="tools"
-                             instance="net.pandadev.ziitjetbrains.config.ZiitSettingsConfigurable"
-                             id="net.pandadev.ziitjetbrains.config.ZiitSettingsConfigurable"
-                             displayName="Ziit Configuration"/>
-    
-    <statusBarWidgetFactory id="ZiitStatusBarWidget" 
-                           implementation="net.pandadev.ziitjetbrains.ui.ZiitStatusBarWidgetFactory"/>
-    
-    <notificationGroup id="Ziit Notifications" displayType="BALLOON"/>
+    <!-- Extension points defined by the plugin.
+         Read more: https://plugins.jetbrains.com/docs/intellij/plugin-extension-points.html -->
+    <extensions defaultExtensionNs="com.intellij">
+        <applicationConfigurable parentId="tools"
+                                 instance="net.pandadev.ziitjetbrains.Settings"
+                                 id="net.pandadev.ziitjetbrains.Settings"
+                                 displayName="Ziit"/>
 
-    <registryKey key="kotlin.mpp.tests.force.gradle" defaultValue="false" description="Force Gradle for MPP tests" overrides="true"/>
-  </extensions>
-  
-  <actions>
-    <group id="Ziit.Menu" text="Ziit" description="Ziit time tracking actions">
-      <add-to-group group-id="ToolsMenu" anchor="last"/>
-      
-      <action id="Ziit.SetApiKey" 
-              class="net.pandadev.ziitjetbrains.actions.SetApiKeyAction" 
-              text="Set API Key" 
-              description="Set your Ziit API key"/>
-              
-      <action id="Ziit.SetBaseUrl" 
-              class="net.pandadev.ziitjetbrains.actions.SetBaseUrlAction" 
-              text="Set Instance URL" 
-              description="Set your Ziit instance URL"/>
-              
-      <action id="Ziit.OpenDashboard" 
-              class="net.pandadev.ziitjetbrains.actions.OpenDashboardAction" 
-              text="Open Dashboard" 
-              description="Open the Ziit dashboard in your browser"/>
-    </group>
-  </actions>
+        <statusBarWidgetFactory id="StatusBar"
+                                implementation="net.pandadev.ziitjetbrains.StatusBar"/>
+
+        <notificationGroup id="Ziit Notifications" displayType="BALLOON"/>
+
+        <registryKey key="kotlin.mpp.tests.force.gradle" defaultValue="false" description="Force Gradle for MPP tests"
+                     overrides="true"/>
+    </extensions>
+
+    <applicationListeners>
+        <listener class="net.pandadev.ziitjetbrains.Listeners$SaveListener"
+                  topic="com.intellij.openapi.fileEditor.FileDocumentManagerListener"/>
+        <listener class="net.pandadev.ziitjetbrains.Listeners$EditorMouseListener"
+                  topic="com.intellij.openapi.editor.event.EditorMouseListener"/>
+        <listener class="net.pandadev.ziitjetbrains.Listeners$VisibleAreaListener"
+                  topic="com.intellij.openapi.editor.event.VisibleAreaListener"/>
+        <listener class="net.pandadev.ziitjetbrains.Listeners$CaretListener"
+                  topic="com.intellij.openapi.editor.event.CaretListener"/>
+        <listener class="net.pandadev.ziitjetbrains.Listeners$DocumentListener"
+                  topic="com.intellij.openapi.editor.event.BulkAwareDocumentListener"/>
+        <listener class="net.pandadev.ziitjetbrains.Listeners$FileEditorListener"
+                  topic="com.intellij.openapi.fileEditor.FileEditorManagerListener"/>
+    </applicationListeners>
 </idea-plugin>
