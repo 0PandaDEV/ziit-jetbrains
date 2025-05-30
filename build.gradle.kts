@@ -45,6 +45,14 @@ intellijPlatform {
   }
 }
 
+// Extract JSON library and include it in the plugin jar
+val extractJsonLibrary by tasks.registering(Copy::class) {
+  from(configurations.runtimeClasspath.get()
+    .filter { it.name.contains("json") }
+    .map { zipTree(it) })
+  into(layout.buildDirectory.dir("json-lib"))
+}
+
 tasks {
   // Set the JVM compatibility versions
   withType<JavaCompile> {
@@ -55,5 +63,16 @@ tasks {
     kotlinOptions.jvmTarget = "17"
     kotlinOptions.apiVersion = "1.9"
     kotlinOptions.languageVersion = "1.9"
+  }
+  
+  // Include JSON library classes directly in the plugin jar
+  jar {
+    dependsOn(extractJsonLibrary)
+    from(layout.buildDirectory.dir("json-lib"))
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
+  }
+  
+  prepareSandbox {
+    dependsOn(jar)
   }
 }
