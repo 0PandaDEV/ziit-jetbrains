@@ -1,7 +1,7 @@
 plugins {
   id("java")
-  id("org.jetbrains.kotlin.jvm") version "1.9.25"
-  id("org.jetbrains.intellij.platform") version "2.3.0"
+  id("org.jetbrains.kotlin.jvm") version "2.2.0-RC"
+  id("org.jetbrains.intellij.platform") version "2.6.0"
 }
 
 group = "net.pandadev"
@@ -18,14 +18,10 @@ repositories {
 // Read more: https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin.html
 dependencies {
   intellijPlatform {
-    create("IC", "2024.2.5")
+    create("IC", "2025.1")
     testFramework(org.jetbrains.intellij.platform.gradle.TestFrameworkType.Platform)
-
-    // Add necessary plugin dependencies for compilation here, example:
-    // bundledPlugin("com.intellij.java")
   }
-  
-  // JSON library
+
   implementation("org.json:json:20240303")
 }
 
@@ -33,6 +29,7 @@ intellijPlatform {
   pluginConfiguration {
     ideaVersion {
       sinceBuild = "242"
+      untilBuild = "251.*"
     }
 
     changeNotes = """
@@ -45,7 +42,6 @@ intellijPlatform {
   }
 }
 
-// Extract JSON library and include it in the plugin jar
 val extractJsonLibrary by tasks.registering(Copy::class) {
   from(configurations.runtimeClasspath.get()
     .filter { it.name.contains("json") }
@@ -54,18 +50,18 @@ val extractJsonLibrary by tasks.registering(Copy::class) {
 }
 
 tasks {
-  // Set the JVM compatibility versions
   withType<JavaCompile> {
     sourceCompatibility = "17"
     targetCompatibility = "17"
   }
   withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
-    kotlinOptions.jvmTarget = "17"
-    kotlinOptions.apiVersion = "1.9"
-    kotlinOptions.languageVersion = "1.9"
+    compilerOptions {
+      jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+      apiVersion.set(org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_1_9)
+      languageVersion.set(org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_1_9)
+    }
   }
   
-  // Include JSON library classes directly in the plugin jar
   jar {
     dependsOn(extractJsonLibrary)
     from(layout.buildDirectory.dir("json-lib"))
