@@ -6,6 +6,7 @@ import com.intellij.openapi.wm.StatusBar
 import com.intellij.openapi.wm.StatusBarWidget
 import com.intellij.openapi.wm.StatusBarWidgetFactory
 import com.intellij.openapi.wm.WindowManager
+import com.intellij.openapi.wm.impl.status.EditorBasedWidget
 import com.intellij.util.Consumer
 import java.awt.event.MouseEvent
 
@@ -30,7 +31,7 @@ class StatusBar : StatusBarWidgetFactory {
 
     override fun isEnabledByDefault(): Boolean = true
 
-    class ZiitStatusBarWidget(val project: Project) : StatusBarWidget, StatusBarWidget.TextPresentation {
+    class ZiitStatusBarWidget(project: Project) : EditorBasedWidget(project) {
         private val config = Config.getInstance()
         private val heartbeatService = HeartbeatService.getInstance()
 
@@ -94,43 +95,47 @@ class StatusBar : StatusBarWidgetFactory {
 
         override fun ID(): String = "StatusBar"
 
-        override fun getTooltipText(): String? {
-            return when {
-                !hasValidApiKey -> "Invalid or missing API key. Click to configure."
-                !isOnline -> "Working offline. Changes will be synced when online."
-                else -> "Ziit: Today's coding time. Click to open dashboard."
-            }
-        }
+        override fun getPresentation(): StatusBarWidget.WidgetPresentation {
+            return object : StatusBarWidget.TextPresentation {
+                override fun getText(): String {
+                    if (!hasValidApiKey) {
+                        return "⚠ Unconfigured"
+                    }
 
-        override fun getText(): String {
-            if (!hasValidApiKey) {
-                return "⚠ Unconfigured"
-            }
+                    var displaySeconds = totalSeconds
 
-            var displaySeconds = totalSeconds
+                    if (isTracking) {
+                        val elapsedSeconds = (System.currentTimeMillis() - trackingStartTime) / 1000
+                        displaySeconds += elapsedSeconds.toInt()
+                    }
 
-            if (isTracking) {
-                val elapsedSeconds = (System.currentTimeMillis() - trackingStartTime) / 1000
-                displaySeconds += elapsedSeconds.toInt()
-            }
+                    val hours = displaySeconds / 3600
+                    val minutes = (displaySeconds % 3600) / 60
 
-            val hours = displaySeconds / 3600
-            val minutes = (displaySeconds % 3600) / 60
+                    return when {
+                        !isOnline -> "⏱ $hours hrs $minutes mins (offline)"
+                        else -> "⏱ $hours hrs $minutes mins"
+                    }
+                }
 
-            return when {
-                !isOnline -> "⏱ $hours hrs $minutes mins (offline)"
-                else -> "⏱ $hours hrs $minutes mins"
-            }
-        }
+                override fun getTooltipText(): String? {
+                    return when {
+                        !hasValidApiKey -> "Invalid or missing API key. Click to configure."
+                        !isOnline -> "Working offline. Changes will be synced when online."
+                        else -> "Ziit: Today's coding time. Click to open dashboard."
+                    }
+                }
 
-        override fun getAlignment(): Float = 0.5f
+                override fun getAlignment(): Float = 0.5f
 
-        override fun getClickConsumer(): Consumer<MouseEvent>? {
-            return Consumer<MouseEvent> { _ ->
-                if (!hasValidApiKey) {
-                    config.promptForApiKey()
-                } else {
-                    openDashboard()
+                override fun getClickConsumer(): Consumer<MouseEvent> {
+                    return Consumer<MouseEvent> { _ ->
+                        if (!hasValidApiKey) {
+                            config.promptForApiKey()
+                        } else {
+                            openDashboard()
+                        }
+                    }
                 }
             }
         }
