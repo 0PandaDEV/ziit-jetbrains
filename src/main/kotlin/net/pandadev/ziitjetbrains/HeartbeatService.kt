@@ -20,6 +20,7 @@ import java.io.File
 import java.net.URI
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
+import java.nio.file.Path
 import java.nio.file.Paths
 import java.text.SimpleDateFormat
 import java.util.*
@@ -42,7 +43,19 @@ class HeartbeatService : ApplicationActivationListener {
     companion object {
         private const val HEARTBEAT_INTERVAL_MS = 120000L
         private const val OFFLINE_FILE_NAME = "offline_heartbeats.json"
-        private val OFFLINE_FILE_PATH =
+
+        private fun getConfigDir(): Path {
+            val xdgConfigHome = System.getenv("XDG_CONFIG_HOME")
+            return if (xdgConfigHome != null && xdgConfigHome.isNotEmpty()) {
+                Paths.get(xdgConfigHome, "ziit")
+            } else {
+                Paths.get(System.getProperty("user.home"), ".config", "ziit")
+            }
+        }
+
+        private val CONFIG_DIR = getConfigDir()
+        private val OFFLINE_FILE_PATH = CONFIG_DIR.resolve(OFFLINE_FILE_NAME)
+        private val LEGACY_OFFLINE_FILE_PATH =
             Paths.get(System.getProperty("user.home"), ".ziit", OFFLINE_FILE_NAME)
 
         fun getInstance(): HeartbeatService = service()
@@ -68,10 +81,8 @@ class HeartbeatService : ApplicationActivationListener {
     private var statusBarWidget: StatusBar.ZiitStatusBarWidget? = null
 
     init {
-        val ziitDir = File(System.getProperty("user.home"), ".ziit")
-        if (!ziitDir.exists()) {
-            ziitDir.mkdirs()
-        }
+        ensureConfigDir()
+        migrateOfflineHeartbeats()
 
         ApplicationManager.getApplication()
             .messageBus
@@ -94,6 +105,41 @@ class HeartbeatService : ApplicationActivationListener {
         lastActivity = System.currentTimeMillis()
         statusBarWidget?.startTracking()
         fetchDailySummary()
+    }
+
+    private fun ensureConfigDir() {
+        try {
+            Files.createDirectories(CONFIG_DIR)
+        } catch (e: Exception) {
+            logger.error("Error creating config directory: ${e.message}")
+        }
+    }
+
+    private fun migrateOfflineHeartbeats() {
+        try {
+            val legacyFile = LEGACY_OFFLINE_FILE_PATH.toFile()
+            val newFile = OFFLINE_FILE_PATH.toFile()
+
+            if (legacyFile.exists() && !newFile.exists()) {
+                Files.copy(LEGACY_OFFLINE_FILE_PATH, OFFLINE_FILE_PATH)
+
+                legacyFile.delete()
+
+                logger.info("Migrated offline heartbeats from ${LEGACY_OFFLINE_FILE_PATH} to ${OFFLINE_FILE_PATH}")
+
+                try {
+                    val legacyDir = legacyFile.parentFile
+                    if (legacyDir.exists() && legacyDir.listFiles()?.isEmpty() == true) {
+                        legacyDir.delete()
+                        logger.info("Removed empty legacy directory: ${legacyDir.absolutePath}")
+                    }
+                } catch (e: Exception) {
+                    logger.warn("Could not remove empty legacy directory: ${e.message}")
+                }
+            }
+        } catch (e: Exception) {
+            logger.error("Error migrating offline heartbeats: ${e.message}")
+        }
     }
 
     override fun applicationDeactivated(ideFrame: IdeFrame) {

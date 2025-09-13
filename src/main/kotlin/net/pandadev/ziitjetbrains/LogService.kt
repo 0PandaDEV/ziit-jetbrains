@@ -19,4 +19,12 @@ class LogService {
     fun error(message: String) {
         logger.error(message)
     }
+
+    fun warn(message: String){
+        logger.warn(message)
+    }
+
+    fun info(message: String){
+        logger.info(message)
+    }
 }
