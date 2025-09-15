@@ -27,6 +27,13 @@ jobs:
       - name: Build Plugin
         run: ./gradlew buildPlugin
 
+      - name: Debug - Find ZIP files
+        run: |
+          echo "Looking for ZIP files..."
+          find . -name "*.zip" -type f
+          echo "Contents of build directory:"
+          find build -type f -name "*.zip" 2>/dev/null || echo "No ZIP files in build directory"
+
       - name: Publish to JetBrains Marketplace
         uses: CodingWithCalvin/GHA-JBMarketplacePublisher@v1
         with:
