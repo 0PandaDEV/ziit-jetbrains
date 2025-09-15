@@ -28,7 +28,7 @@ jobs:
         run: ./gradlew buildPlugin
 
       - name: Publish to JetBrains Marketplace
-        uses: CodingWithCalvin/GHA-JBMarketplacePublisher@v1
+        uses: CodingWithCalvin/GHA-JBMarketplacePublisher@HEAD
         with:
           marketplace-pat: ${{ secrets.MARKETPLACE_PAT }}
           plugin-id: 27391
