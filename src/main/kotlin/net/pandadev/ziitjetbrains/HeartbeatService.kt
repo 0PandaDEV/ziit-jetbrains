@@ -543,7 +543,7 @@ class HeartbeatService : ApplicationActivationListener {
 
         ApplicationManager.getApplication().executeOnPooledThread {
             try {
-                val url = URI("$baseUrl/api/external/heartbeats")
+                val url = URI("$baseUrl/api/external/heartbeat")
                 val jsonData = heartbeatToJson(heartbeat)
 
                 sendJsonRequest(url, jsonData.toString(), apiKey)
