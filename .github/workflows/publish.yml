@@ -27,16 +27,19 @@ jobs:
       - name: Build Plugin
         run: ./gradlew buildPlugin
 
-      - name: Debug - Find ZIP files
+      - name: Resolve plugin archive path
+        id: plugin_zip
         run: |
-          echo "Looking for ZIP files..."
-          find . -name "*.zip" -type f
-          echo "Contents of build directory:"
-          find build -type f -name "*.zip" 2>/dev/null || echo "No ZIP files in build directory"
+          zip_path=$(find build/distributions -maxdepth 1 -name '*.zip' -type f | head -n 1)
+          if [ -z "$zip_path" ]; then
+            echo "::error::No plugin ZIP found in build/distributions"
+            exit 1
+          fi
+          echo "path=$zip_path" >> "$GITHUB_OUTPUT"
 
       - name: Publish to JetBrains Marketplace
         uses: CodingWithCalvin/GHA-JBMarketplacePublisher@HEAD
         with:
           marketplace-pat: ${{ secrets.MARKETPLACE_PAT }}
           plugin-id: 27391
-          archive-path: "build/distributions/*.zip"
+          archive-path: ${{ steps.plugin_zip.outputs.path }}
