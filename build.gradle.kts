@@ -18,7 +18,7 @@ repositories {
 // Read more: https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin.html
 dependencies {
   intellijPlatform {
-    create("IU", "2025.3")
+    create("IU", "2026.2")
     testFramework(org.jetbrains.intellij.platform.gradle.TestFrameworkType.Platform)
   }
 
@@ -29,7 +29,7 @@ intellijPlatform {
   pluginConfiguration {
     ideaVersion {
       sinceBuild = "253"
-      untilBuild = "253.*"
+      untilBuild = "262.*"
     }
 
     changeNotes = """
