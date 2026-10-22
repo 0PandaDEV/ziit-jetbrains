@@ -27,7 +27,7 @@ dependencies {
 
 intellijPlatform {
   publishing {
-    token = providers.environmentVariable("PUBLISH_TOKEN")
+    token = providers.environmentVariable("MARKETPLACE_PAT")
   }
 
   pluginConfiguration {

@@ -60,9 +60,9 @@ jobs:
 
       - name: Publish to JetBrains Marketplace
         env:
-          PUBLISH_TOKEN: ${{ secrets.MARKETPLACE_PAT }}
+          MARKETPLACE_PAT: ${{ secrets.MARKETPLACE_PAT }}
         run: |
-          if [ -z "$PUBLISH_TOKEN" ]; then
+          if [ -z "$MARKETPLACE_PAT" ]; then
             echo "::error::MARKETPLACE_PAT secret is empty or unavailable"
             exit 1
           fi
