@@ -61,7 +61,12 @@ jobs:
       - name: Publish to JetBrains Marketplace
         env:
           PUBLISH_TOKEN: ${{ secrets.MARKETPLACE_PAT }}
-        run: ./gradlew publishPlugin
+        run: |
+          if [ -z "$PUBLISH_TOKEN" ]; then
+            echo "::error::MARKETPLACE_PAT secret is empty or unavailable"
+            exit 1
+          fi
+          ./gradlew publishPlugin --no-configuration-cache
 
       - name: Changelog
         id: changelog
