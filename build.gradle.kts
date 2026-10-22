@@ -26,6 +26,10 @@ dependencies {
 }
 
 intellijPlatform {
+  publishing {
+    token = providers.environmentVariable("MARKETPLACE_PAT")
+  }
+
   pluginConfiguration {
     ideaVersion {
       sinceBuild = "253"

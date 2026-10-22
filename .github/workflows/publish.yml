@@ -5,12 +5,33 @@ on:
     tags:
       - "v*.*.*"
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to release
+        required: true
+      base:
+        description: Previous tag or ref to compare from (defaults to the previous tag)
+        required: false
+
+concurrency:
+  group: release-${{ github.event.inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  TAG: ${{ github.event.inputs.tag || github.ref_name }}
 
 jobs:
   publish:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ env.TAG }}
 
       - name: Set up JDK 21
         uses: actions/setup-java@v3
@@ -38,8 +59,32 @@ jobs:
           echo "path=$zip_path" >> "$GITHUB_OUTPUT"
 
       - name: Publish to JetBrains Marketplace
-        uses: CodingWithCalvin/GHA-JBMarketplacePublisher@HEAD
+        env:
+          PUBLISH_TOKEN: ${{ secrets.MARKETPLACE_PAT }}
+        run: ./gradlew publishPlugin
+
+      - name: Changelog
+        id: changelog
+        uses: 0PandaDEV/changelog@main
         with:
-          marketplace-pat: ${{ secrets.MARKETPLACE_PAT }}
-          plugin-id: 27391
-          archive-path: ${{ steps.plugin_zip.outputs.path }}
+          head: ${{ env.TAG }}
+          base: ${{ github.event.inputs.base }}
+          step-summary: "true"
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          NOTES: ${{ steps.changelog.outputs.markdown }}
+          ZIP: ${{ steps.plugin_zip.outputs.path }}
+        run: |
+          flags=()
+          if [[ "$TAG" == *-* ]]; then
+            flags+=(--prerelease)
+          fi
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --notes "$NOTES" "${flags[@]}"
+            gh release upload "$TAG" "$ZIP" --clobber
+          else
+            gh release create "$TAG" "$ZIP" --verify-tag --title "$TAG" --notes "$NOTES" "${flags[@]}"
+          fi
