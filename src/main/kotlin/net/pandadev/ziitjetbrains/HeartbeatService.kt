@@ -1,7 +1,7 @@
 package net.pandadev.ziitjetbrains
 
 import com.intellij.openapi.application.ApplicationActivationListener
-import com.intellij.openapi.application.ApplicationInfo
+import com.intellij.openapi.application.ApplicationNamesInfo
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
@@ -42,6 +42,8 @@ data class Heartbeat(
 class HeartbeatService : ApplicationActivationListener {
     companion object {
         private const val HEARTBEAT_INTERVAL_MS = 120000L
+        private const val TRAILING_FLUSH_DELAY_MS = 30000L
+        private const val INACTIVITY_THRESHOLD_MS = 300000L
         private const val OFFLINE_FILE_NAME = "offline_heartbeats.json"
 
         private fun getConfigDir(): Path {
@@ -74,10 +76,10 @@ class HeartbeatService : ApplicationActivationListener {
     private var offlineHeartbeats: MutableList<Heartbeat> = ArrayList()
     private var isOnline: Boolean = true
     private var hasValidApiKey: Boolean = true
-    private var lastActivity: Long = System.currentTimeMillis()
+    @Volatile private var lastActivity: Long = System.currentTimeMillis()
+    @Volatile private var pendingActivity: Boolean = false
     private var todayTotalSeconds: Int = 0
-    private var isWindowFocused: Boolean = true
-    private var keystrokeTimeout: Int? = null
+    @Volatile private var isWindowFocused: Boolean = true
     private var statusBarWidget: StatusBar.ZiitStatusBarWidget? = null
 
     init {
@@ -145,6 +147,7 @@ class HeartbeatService : ApplicationActivationListener {
     override fun applicationDeactivated(ideFrame: IdeFrame) {
         logger.log("Application deactivated (window lost focus)")
         isWindowFocused = false
+        flushPendingActivity()
         statusBarWidget?.stopTracking()
     }
 
@@ -154,22 +157,42 @@ class HeartbeatService : ApplicationActivationListener {
         this.statusBarWidget?.setApiKeyStatus(hasValidApiKey)
     }
 
-    fun handleFileChange(file: VirtualFile) {
+    fun handleFileChange(file: VirtualFile, force: Boolean = false) {
+        if (!isWindowFocused) return
+
         val fileName = file.name
+        val previous = activeDocumentInfo
 
-        val fileType =
-            FileTypeManager.getInstance().getFileTypeByFile(file)
-        val language =
-            when {
-                fileType.name != "UNKNOWN" -> fileType.name.lowercase()
-                file.extension != null -> file.extension?.lowercase() ?: "unknown"
-                else -> "unknown"
-            }
+        if (previous == null || previous.first != fileName) {
+            val fileType =
+                FileTypeManager.getInstance().getFileTypeByFile(file)
+            val language =
+                when {
+                    fileType.name != "UNKNOWN" -> fileType.name.lowercase()
+                    file.extension != null -> file.extension?.lowercase() ?: "unknown"
+                    else -> "unknown"
+                }
 
-        logger.log("File changed: $fileName ($language)")
-        activeDocumentInfo = Pair(fileName, language)
+            logger.log("File changed: $fileName ($language)")
+            activeDocumentInfo = Pair(fileName, language)
+        }
+
         updateActivity()
-        sendHeartbeat(true)
+
+        val now = System.currentTimeMillis()
+        val fileChanged = lastFile != fileName
+        val timeThresholdPassed = now - lastHeartbeat >= HEARTBEAT_INTERVAL_MS
+
+        if (force || fileChanged || timeThresholdPassed) {
+            pendingActivity = false
+            sendHeartbeat(true)
+        }
+    }
+
+    private fun flushPendingActivity() {
+        if (!pendingActivity || activeDocumentInfo == null) return
+        pendingActivity = false
+        sendHeartbeat(true, lastActivity)
     }
 
     private fun getFileNameFromEditor(editor: Editor): String? {
@@ -270,43 +293,29 @@ class HeartbeatService : ApplicationActivationListener {
 
     private fun updateActivity() {
         lastActivity = System.currentTimeMillis()
+        pendingActivity = true
         statusBarWidget?.startTracking()
     }
 
     private fun scheduleHeartbeat() {
-        logger.log("Setting up heartbeat schedule with interval: $HEARTBEAT_INTERVAL_MS ms")
+        logger.log(
+            "Setting up activity flush with throttle $HEARTBEAT_INTERVAL_MS ms and inactivity threshold $INACTIVITY_THRESHOLD_MS ms"
+        )
 
         scheduler.scheduleAtFixedRate(
             {
-                if (activeDocumentInfo != null && isUserActive()) {
-                    sendHeartbeat()
-                } else {
-                    logger.log("User inactive or no active document, skipping heartbeat")
-                    if (!isUserActive()) {
-                        statusBarWidget?.stopTracking()
-                    }
+                val idleFor = System.currentTimeMillis() - lastActivity
+                if (isWindowFocused && idleFor >= TRAILING_FLUSH_DELAY_MS) {
+                    flushPendingActivity()
+                }
+                if (!isWindowFocused || idleFor >= INACTIVITY_THRESHOLD_MS) {
+                    statusBarWidget?.stopTracking()
                 }
             },
-            HEARTBEAT_INTERVAL_MS,
-            HEARTBEAT_INTERVAL_MS,
-            TimeUnit.MILLISECONDS
+            15,
+            15,
+            TimeUnit.SECONDS
         )
-    }
-
-    private fun isUserActive(): Boolean {
-        val now = System.currentTimeMillis()
-        val keystrokeTimeoutMs = keystrokeTimeout?.let { it * 60 * 1000 }
-
-        return if (keystrokeTimeoutMs != null) {
-            isWindowFocused && now - lastActivity < keystrokeTimeoutMs
-        } else {
-            isWindowFocused
-        }
-    }
-
-    fun updateKeystrokeTimeout(timeoutMinutes: Int?) {
-        this.keystrokeTimeout = timeoutMinutes
-        logger.log("Keystroke timeout updated to ${timeoutMinutes ?: "disabled"}")
     }
 
     private fun fetchDailySummary() {
@@ -470,7 +479,7 @@ class HeartbeatService : ApplicationActivationListener {
         }
     }
 
-    private fun sendHeartbeat(force: Boolean = false) {
+    private fun sendHeartbeat(force: Boolean = false, timestampMs: Long? = null) {
         if (activeDocumentInfo == null) return
 
         val now = System.currentTimeMillis()
@@ -482,7 +491,7 @@ class HeartbeatService : ApplicationActivationListener {
         }
 
         lastFile = activeDocumentInfo!!.first
-        lastHeartbeat = now
+        lastHeartbeat = timestampMs ?: now
         heartbeatCount++
 
         val (fileName, language) = activeDocumentInfo!!
@@ -507,7 +516,7 @@ class HeartbeatService : ApplicationActivationListener {
         val branch = getGitBranch(docFile)
         val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
         sdf.timeZone = TimeZone.getTimeZone("UTC")
-        val utcTimestamp = sdf.format(Date())
+        val utcTimestamp = sdf.format(Date(timestampMs ?: now))
 
         val heartbeat =
             Heartbeat(
@@ -516,13 +525,7 @@ class HeartbeatService : ApplicationActivationListener {
                 language = language,
                 file = fileName,
                 branch = branch,
-                editor =
-                    if (ApplicationInfo.getInstance()
-                            .fullApplicationName
-                            .contains("Ultimate")
-                    )
-                        "IntelliJ Ultimate"
-                    else "IntelliJ Community Edition",
+                editor = ApplicationNamesInfo.getInstance().fullProductName,
                 os =
                     System.getProperty("os.name").let {
                         when {

@@ -13,7 +13,7 @@ class Listeners {
         override fun beforeDocumentSaving(document: Document) {
             try {
                 val file = getFileFromDocument(document) ?: return
-                heartbeatSend(file)
+                heartbeatSend(file, true)
             } catch (e: Exception) {
                 LogService.getInstance().error("Error in SaveListener: ${e.message}")
             }
@@ -95,7 +95,7 @@ class Listeners {
             try {
                 val file = event.newFile ?: return
 
-                heartbeatSend(file)
+                heartbeatSend(file, true)
             } catch (e: Exception) {
                 LogService.getInstance().error("Error in FileEditorListener: ${e.message}")
             }
@@ -110,8 +110,8 @@ class Listeners {
             return fileDocManager.getFile(document)
         }
 
-        fun heartbeatSend(file: VirtualFile) {
-            heartbeatService.handleFileChange(file)
+        fun heartbeatSend(file: VirtualFile, force: Boolean = false) {
+            heartbeatService.handleFileChange(file, force)
         }
     }
 } 
