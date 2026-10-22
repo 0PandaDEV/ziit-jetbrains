@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "net.pandadev"
-version = "1.1.2"
+version = "1.1.3"
 
 repositories {
   mavenCentral()
@@ -29,7 +29,7 @@ intellijPlatform {
   pluginConfiguration {
     ideaVersion {
       sinceBuild = "253"
-      untilBuild = "262.*"
+      untilBuild = provider { null }
     }
 
     changeNotes = """
